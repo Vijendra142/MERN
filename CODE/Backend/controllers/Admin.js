@@ -1,5 +1,4 @@
 const express = require("express");
-const { Request, Response, NextFunction } = require("express");
 const Usemodel = require("../models/User");
 const multer = require('multer');
 const path = require('path');
@@ -22,9 +21,7 @@ router.post('/login', async (req, res, next) => {
         console.log(req.body);
         if (email === "admin@gmail.com" && password === "admin") {
             const token = jwt.sign({ email: email }, "eyJhbGciOiJIUzI1NiJ9.eyJSb2xlIjoiQWRtaW4iLCJJc3N1ZXIiOiJJc3N1ZXIiLCJVc2VybmFtZSI6IkphdmFJblVzZSIsImV4cCI6MTcxMDU3NTk3MywiaWF0IjoxNzEwNTc1OTczfQ.daq9weny70apNazg0M-4eVkB4fMab8ixcp_bHRZ7HME", { expiresIn: "1hr" });
-            res.cookie('token', token, {
-                httpOnly: false
-            });
+            res.cookie('token', token, { httpOnly: false });
             return res.status(200).json({
                 success: true,
                 message: "Successful login"
@@ -48,36 +45,28 @@ router.post('/login', async (req, res, next) => {
 router.get('/count', async (req, res, next) => {
     try {
         const users = await Usemodel.countDocuments();
-        console.log(users, 'user count');
         const products = await ProductSchema.countDocuments();
-        console.log(products, 'product count');
         const orders = await Order.countDocuments();
-        console.log(orders, 'orders count');
 
         const user = await Usemodel.aggregate([
             { $group: { _id: { $month: "$dates" }, count: { $sum: 1 } } },
             { $sort: { _id: 1 } }
         ]);
 
-        console.log(user, 'users');
         const product = await ProductSchema.aggregate([
             { $group: { _id: { $month: "$createAt" }, count: { $sum: 1 } } },
             { $sort: { _id: 1 } }
         ]);
-        console.log(product, 'products');
 
         const order = await Order.aggregate([
             { $group: { _id: { $month: "$shippingDate" }, count: { $sum: 1 } } },
             { $sort: { _id: 1 } }
         ]);
-        console.log(order, 'orders');
 
         const sales = await Order.aggregate([
             { $match: { Status: 'delivery' } },
             { $group: { _id: null, count: { $sum: 1 } } }
         ]);
-
-        console.log(sales, 'sales');
 
         return res.status(200).json({
             success: true,
@@ -86,7 +75,8 @@ router.get('/count', async (req, res, next) => {
             orders: orders,
             user: user,
             product: product,
-            order: order
+            order: order,
+            sales: sales
         });
     } catch (error) {
         console.log(error);
@@ -142,7 +132,7 @@ router.post('/products', tokenverify, upload.array('image'), validate(Addproduct
             createAt: Date.now(),
             image: images
         });
-        console.log(newProduct);
+
         if (newProduct) {
             return res.status(201).json({
                 success: true,
@@ -152,7 +142,7 @@ router.post('/products', tokenverify, upload.array('image'), validate(Addproduct
         } else {
             return res.status(400).json({
                 success: false,
-                message: "Invalid credentials"
+                message: "Failed to add product"
             });
         }
     } catch (error) {
@@ -217,12 +207,7 @@ router.get('/products', tokenverify, async (req, res, next) => {
 // Update product
 router.put('/product/:id', tokenverify, upload.array('image'), async (req, res, next) => {
     const id = req.params.id;
-    console.log(id);
     try {
-        const product = await ProductSchema.aggregate([
-            { $match: { _id: new mongoose.Types.ObjectId(id) } }
-        ]);
-        console.log(product);
         const { productname, description, Originalprice, Price, category, stock } = req.body;
 
         if (!req.files || req.files.length === 0) {
@@ -244,15 +229,16 @@ router.put('/product/:id', tokenverify, upload.array('image'), async (req, res, 
             createAt: Date.now(),
             image: images
         });
+
         if (updateProduct) {
             return res.status(201).json({
                 success: true,
-                message: "Updated successfully"
+                message: "Product updated successfully"
             });
         } else {
             return res.status(400).json({
                 success: false,
-                message: "Something went wrong, try again later"
+                message: "Failed to update product"
             });
         }
     } catch (error) {
@@ -273,9 +259,10 @@ router.delete('/product/:id', tokenverify, async (req, res, next) => {
         if (!product) {
             return res.status(404).json({
                 success: false,
-                message: "No product found with this ID"
+                message: "Product not found"
             });
         }
+
         const productDelete = await ProductSchema.findByIdAndDelete(id);
         if (productDelete) {
             return res.status(200).json({
@@ -285,7 +272,7 @@ router.delete('/product/:id', tokenverify, async (req, res, next) => {
         } else {
             return res.status(400).json({
                 success: false,
-                message: "Something went wrong, try again later"
+                message: "Failed to delete product"
             });
         }
     } catch (error) {
